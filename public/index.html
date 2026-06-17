@@ -7,26 +7,31 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
+  <!-- grain / scanline overlay -->
+  <div class="scanlines"></div>
+  <div class="ambient-glow"></div>
+
   <!-- Name modal -->
   <div id="nameModal" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-logo">🎵</div>
-      <h2>Welcome to Jukebox</h2>
+    <div class="modal-box name-box">
+      <div class="modal-logo">JUKEBOX</div>
+      <p class="modal-sub">Office Edition · Side B</p>
+      <h2>Drop in</h2>
       <p>What should we call you?</p>
       <input id="nameInput" type="text" placeholder="Your name" maxlength="30" autocomplete="off">
-      <button id="nameSubmit">Let's go</button>
+      <button id="nameSubmit" class="primary-btn">Let's go</button>
     </div>
   </div>
 
   <!-- Passcode modal -->
   <div id="passcodeModal" class="modal-overlay hidden">
     <div class="modal-box passcode-box">
-      <h2>Clear queue</h2>
-      <p>Enter the passcode to clear all songs from the queue.</p>
+      <h2 id="passcodeTitle">Clear queue</h2>
+      <p>Enter the passcode to continue.</p>
       <input id="passcodeInput" type="password" inputmode="numeric" placeholder="Passcode" maxlength="20" autocomplete="off">
       <div id="passcodeError" class="passcode-error hidden">Incorrect passcode</div>
       <div class="modal-actions">
@@ -84,33 +89,56 @@
   <!-- Main app -->
   <div id="app" class="app hidden">
 
-    <!-- Left: Now Playing panel -->
+    <!-- ===================== SIDEBAR (the machine face) ===================== -->
     <aside class="sidebar">
+      <div class="chrome-arch"></div>
+
+      <!-- header -->
       <div class="sidebar-header">
-        <span class="logo">🎵 Jukebox</span>
-        <div class="sidebar-header-right">
-          <span id="userBadge" class="user-badge"></span>
-          <button id="btnSettings" class="icon-btn" title="Roku settings">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-          </button>
+        <div class="brand">
+          <div class="logo">JUKEBOX</div>
+          <div class="brand-sub">Office Edition · Side B</div>
+        </div>
+        <button id="btnSettings" class="icon-btn" title="Roku settings">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+      </div>
+
+      <!-- TURNTABLE -->
+      <div class="turntable">
+        <div id="vinyl" class="vinyl">
+          <div class="vinyl-grooves"></div>
+          <div class="vinyl-sheen"></div>
+          <div class="vinyl-label">
+            <img id="albumArt" class="album-art" src="" alt="" onerror="this.style.opacity=0">
+            <div id="albumArtPlaceholder" class="album-art-placeholder">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="vinyl-spindle"></div>
+        </div>
+        <div class="tonearm">
+          <div class="tonearm-pivot"></div>
+          <div class="tonearm-head"></div>
         </div>
       </div>
 
-      <div class="album-art-wrap">
-        <img id="albumArt" class="album-art" src="" alt="">
-        <div id="albumArtPlaceholder" class="album-art-placeholder">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-        </div>
-      </div>
-
+      <!-- now playing info -->
       <div class="now-playing-info">
+        <div class="status-line">
+          <div id="eqBars" class="eq-bars">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <span id="statusWord" class="status-word">Now Spinning</span>
+        </div>
         <div id="nowTitle" class="now-title">Nothing playing</div>
         <div id="nowAuthor" class="now-author"></div>
         <div id="nowAddedBy" class="now-added-by"></div>
       </div>
 
+      <!-- progress -->
       <div class="progress-wrap">
         <span id="elapsed" class="time-label">0:00</span>
         <div class="progress-track">
@@ -119,29 +147,28 @@
         <span id="totalTime" class="time-label">0:00</span>
       </div>
 
+      <!-- controls -->
       <div class="controls">
-        <button id="btnPlayPause" class="ctrl-btn ctrl-main" title="Play / Pause">
-          <svg id="iconPlay" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          <svg id="iconPause" viewBox="0 0 24 24" width="26" height="26" fill="currentColor" class="hidden"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-        </button>
         <button id="btnNext" class="ctrl-btn hidden" title="Skip">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2-8.14 4.96 2.14L8 14.14V9.86zM16 6h2v12h-2z"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>
+        </button>
+        <button id="btnPlayPause" class="ctrl-btn ctrl-main" title="Play / Pause">
+          <svg id="iconPause" viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <svg id="iconPlay" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" class="hidden" style="margin-left:3px;"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button id="btnMute" class="ctrl-btn" title="Mute">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
         </button>
       </div>
 
+      <!-- volume -->
       <div class="volume-row">
-        <button id="btnVolDown" class="vol-btn" title="Volume down">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>
-        </button>
-        <span class="vol-label">Volume</span>
-        <button id="btnVolUp" class="vol-btn" title="Volume up">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-        </button>
-        <button id="btnMute" class="vol-btn" title="Mute">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-        </button>
+        <button id="btnVolDown" class="vol-step" title="Volume down">–</button>
+        <div id="volBars" class="vol-bars"></div>
+        <button id="btnVolUp" class="vol-step" title="Volume up">+</button>
       </div>
 
+      <!-- roku status -->
       <div id="rokuStatus" class="roku-status hidden">
         <span class="roku-dot"></span> Roku connected
       </div>
@@ -150,13 +177,14 @@
       </div>
     </aside>
 
-    <!-- Right: Queue + Search -->
+    <!-- ===================== MAIN ===================== -->
     <main class="main">
 
+      <!-- search -->
       <div class="search-area">
         <div class="search-bar">
-          <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-          <input id="searchInput" type="text" placeholder="Search for a song to add…" autocomplete="off">
+          <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <input id="searchInput" type="text" placeholder="Search a track to drop in the queue…" autocomplete="off">
           <button id="searchClear" class="search-clear hidden">✕</button>
         </div>
         <div id="searchResults" class="search-results hidden">
@@ -166,11 +194,11 @@
         </div>
       </div>
 
-      <!-- Tabs -->
+      <!-- tabs -->
       <div class="tab-bar">
-        <button id="tabQueue" class="tab-btn active">Up next <span id="queueCount" class="queue-count"></span></button>
+        <button id="tabQueue" class="tab-btn active">Up Next <span id="queueCount" class="queue-count">0</span></button>
         <button id="tabHistory" class="tab-btn">History</button>
-        <button id="btnClearQueue" class="action-btn action-danger tab-action">Clear queue</button>
+        <button id="btnClearQueue" class="clear-queue-btn">Clear queue</button>
       </div>
 
       <!-- Queue view -->

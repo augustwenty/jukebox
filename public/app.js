@@ -18,15 +18,22 @@ let voterId = getVoterId();
 let searchDebounce = null;
 let progressInterval = null;
 
+// Local volume mirror (Roku is the source of truth; ECP only exposes Up/Down/Mute
+// keypresses, so we estimate the level for the meter display).
+let volLevel = 7;     // 0–10
+let muted = false;
+
 // --- DOM ---
 const nameModal     = document.getElementById('nameModal');
 const nameInput     = document.getElementById('nameInput');
 const nameSubmit    = document.getElementById('nameSubmit');
 const appEl         = document.getElementById('app');
-const userBadge     = document.getElementById('userBadge');
 
+const vinyl         = document.getElementById('vinyl');
 const albumArt      = document.getElementById('albumArt');
 const albumArtPH    = document.getElementById('albumArtPlaceholder');
+const eqBars        = document.getElementById('eqBars');
+const statusWord    = document.getElementById('statusWord');
 const nowTitle      = document.getElementById('nowTitle');
 const nowAuthor     = document.getElementById('nowAuthor');
 const nowAddedBy    = document.getElementById('nowAddedBy');
@@ -41,12 +48,13 @@ const btnNext       = document.getElementById('btnNext');
 const btnVolUp      = document.getElementById('btnVolUp');
 const btnVolDown    = document.getElementById('btnVolDown');
 const btnMute       = document.getElementById('btnMute');
-const btnPrev       = null; // removed
+const volBarsEl     = document.getElementById('volBars');
 
 const rokuStatus    = document.getElementById('rokuStatus');
 const rokuMissing   = document.getElementById('rokuMissing');
 
 const searchInput   = document.getElementById('searchInput');
+const searchBar     = searchInput.closest('.search-bar');
 const searchClear   = document.getElementById('searchClear');
 const searchResults = document.getElementById('searchResults');
 const searchList    = document.getElementById('searchList');
@@ -103,7 +111,7 @@ function initName() {
 function showApp() {
   nameModal.style.display = 'none';
   appEl.classList.remove('hidden');
-  userBadge.textContent = userName;
+  renderVolBars();
 }
 
 nameSubmit.addEventListener('click', submitName);
@@ -137,15 +145,16 @@ function renderNowPlaying() {
   if (song) {
     nowTitle.textContent = song.title;
     nowAuthor.textContent = song.author || '';
-    nowAddedBy.textContent = song.addedBy ? `Added by ${song.addedBy}` : '';
+    nowAddedBy.innerHTML = song.addedBy ? `Dropped by <b>${escHtml(song.addedBy)}</b>` : '';
     totalTime.textContent = formatTime(song.duration);
 
     if (song.thumbnail) {
       albumArt.src = song.thumbnail;
-      albumArt.classList.add('visible');
+      albumArt.style.opacity = '1';
+      albumArt.classList.remove('hidden');
       albumArtPH.classList.add('hidden');
     } else {
-      albumArt.classList.remove('visible');
+      albumArt.classList.add('hidden');
       albumArtPH.classList.remove('hidden');
     }
   } else {
@@ -155,13 +164,21 @@ function renderNowPlaying() {
     totalTime.textContent = '0:00';
     elapsedEl.textContent = '0:00';
     progressBar.style.width = '0%';
-    albumArt.classList.remove('visible');
+    albumArt.classList.add('hidden');
     albumArtPH.classList.remove('hidden');
   }
 
+  // play / pause icon
   iconPlay.classList.toggle('hidden', state.isPlaying);
   iconPause.classList.toggle('hidden', !state.isPlaying);
 
+  // turntable + EQ + status word
+  const spinning = state.isPlaying && !!song;
+  vinyl.classList.toggle('paused', !spinning);
+  eqBars.classList.toggle('paused', !spinning);
+  statusWord.textContent = !song ? 'Idle' : (state.isPlaying ? 'Now Spinning' : 'Paused');
+
+  // skip available only to the song owner
   const ownerVid = state.currentSong?.addedByVoterId;
   const isOwner = ownerVid === voterId || !ownerVid;
   btnNext.classList.toggle('hidden', !isOwner || !state.currentSong);
@@ -191,89 +208,70 @@ function updateProgress() {
   progressBar.style.width = song.duration > 0 ? `${(sec / song.duration) * 100}%` : '0%';
 }
 
-function renderQueue() {
-  const items = state.queue;
-  const current = state.currentSong;
-  const total = items.length + (current ? 1 : 0);
-  queueCount.textContent = total ? `${total} song${total > 1 ? 's' : ''}` : '';
+// --- Volume meter ---
+function renderVolBars() {
+  let html = '';
+  for (let i = 0; i < 10; i++) {
+    const on = !muted && i < volLevel;
+    const h = 40 + i * 6; // 40% → 94%
+    html += `<div class="vbar${on ? ' on' : ''}" style="height:${h}%"></div>`;
+  }
+  volBarsEl.innerHTML = html;
+  btnMute.classList.toggle('muted', muted);
+}
 
-  if (!current && items.length === 0) {
+function renderQueue() {
+  const items = state.queue || [];
+  const ordered = [...items]
+    .map((s, i) => ({ ...s, _i: i, net: s.netVotes || 0 }))
+    .sort((a, b) => b.net - a.net || a._i - b._i);
+
+  queueCount.textContent = ordered.length;
+
+  if (ordered.length === 0) {
     queueList.innerHTML = `
       <div class="queue-empty">
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
         </svg>
-        <p>Queue is empty — search for a song above</p>
+        <p>Queue is empty — search for a track above</p>
       </div>`;
     return;
   }
 
-  const isCurrentOwner = current && (!current.addedByVoterId || current.addedByVoterId === voterId);
-  const nowPlayingRow = current ? `
-    <div class="queue-item now-playing-row${state.isPlaying ? '' : ' paused'}">
-      <div class="now-playing-indicator" title="${state.isPlaying ? 'Now playing' : 'Paused'}">
-        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
-      </div>
-      <img class="queue-thumb" src="${current.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.display='none'">
-      <div class="queue-item-info">
-        <div class="queue-item-title">${escHtml(current.title)}</div>
-        <div class="queue-item-meta">
-          ${current.author ? escHtml(current.author) + ' · ' : ''}
-          <span class="added-by">${escHtml(current.addedBy)}</span>
-        </div>
-      </div>
-      <span class="now-playing-badge">${state.isPlaying ? 'Playing' : 'Paused'}</span>
-      ${isCurrentOwner ? `<button class="queue-remove current-song-remove" title="Remove from queue">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-      </button>` : '<span class="queue-remove-placeholder"></span>'}
-    </div>` : '';
-
-  if (items.length === 0) {
-    queueList.innerHTML = nowPlayingRow;
-    queueList.querySelectorAll('.queue-remove').forEach((btn) => {
-      btn.addEventListener('click', () => socket.emit('removeCurrentSong'));
-    });
-    return;
-  }
-
-  const counts = state.playCounts || {};
-
-  queueList.innerHTML = items.map((song, i) => {
-    const nv = song.netVotes || 0;
+  queueList.innerHTML = ordered.map((song, i) => {
+    const nv = song.net;
     const myVote = song.votes ? (song.votes[voterId] || 0) : 0;
     const countClass = nv > 0 ? 'positive' : nv < 0 ? 'negative' : '';
-    const plays = counts[song.videoId] || 0;
-
     const isOwner = !song.addedByVoterId || song.addedByVoterId === voterId;
     return `
-    <div class="queue-item" data-video="${song.videoId}" data-addedat="${song.addedAt}">
+    <div class="queue-item" data-index="${song._i}">
       <div class="vote-col">
         <button class="vote-btn up ${myVote === 1 ? 'active' : ''}" data-video="${song.videoId}" data-addedat="${song.addedAt}" data-value="1" title="Upvote">▲</button>
         <span class="vote-count ${countClass}">${nv > 0 ? '+' : ''}${nv || 0}</span>
         <button class="vote-btn down ${myVote === -1 ? 'active' : ''}" data-video="${song.videoId}" data-addedat="${song.addedAt}" data-value="-1" title="Downvote">▼</button>
       </div>
       <span class="queue-num">${i + 1}</span>
-      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.display='none'">
+      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
       <div class="queue-item-info">
         <div class="queue-item-title">${escHtml(song.title)}</div>
         <div class="queue-item-meta">
           ${song.author ? escHtml(song.author) + ' · ' : ''}${song.durationStr || formatTime(song.duration)} · <span class="added-by">${escHtml(song.addedBy)}</span>
         </div>
       </div>
-      ${plays > 0 ? `<span class="play-count-badge" title="Times played">${plays}×</span>` : ''}
-      ${isOwner ? `<button class="queue-remove" data-index="${i}" title="Remove from queue">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      ${isOwner ? `<button class="queue-remove" data-index="${song._i}" title="Remove from queue">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       </button>` : '<span class="queue-remove-placeholder"></span>'}
     </div>`;
   }).join('');
 
-  queueList.innerHTML = nowPlayingRow + queueList.innerHTML;
-
-  // dblclick only on the first queued item (index 0)
-  const firstQueued = queueList.querySelector('.queue-item:not(.now-playing-row)');
-  if (firstQueued) {
-    firstQueued.style.cursor = 'pointer';
-    firstQueued.addEventListener('dblclick', () => socket.emit('playNow', 0));
+  // double-click the top-ordered item to play it immediately
+  const firstItem = queueList.querySelector('.queue-item');
+  if (firstItem) {
+    firstItem.style.cursor = 'pointer';
+    firstItem.addEventListener('dblclick', () => {
+      socket.emit('playNow', parseInt(firstItem.dataset.index));
+    });
   }
 
   queueList.querySelectorAll('.vote-btn').forEach((btn) => {
@@ -289,12 +287,9 @@ function renderQueue() {
   });
 
   queueList.querySelectorAll('.queue-remove').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (btn.classList.contains('current-song-remove')) {
-        socket.emit('removeCurrentSong');
-      } else {
-        socket.emit('removeFromQueue', parseInt(btn.dataset.index));
-      }
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      socket.emit('removeFromQueue', parseInt(btn.dataset.index));
     });
   });
 }
@@ -310,11 +305,26 @@ function renderRokuStatus() {
 btnPlayPause.addEventListener('click', () => socket.emit('togglePause'));
 btnNext.addEventListener('click', () => socket.emit('skip'));
 
-btnVolUp.addEventListener('click', () => socket.emit('volumeUp'));
-btnVolDown.addEventListener('click', () => socket.emit('volumeDown'));
-btnMute.addEventListener('click', () => socket.emit('mute'));
+btnVolUp.addEventListener('click', () => {
+  muted = false;
+  volLevel = Math.min(10, volLevel + 1);
+  renderVolBars();
+  socket.emit('volumeUp');
+});
+btnVolDown.addEventListener('click', () => {
+  volLevel = Math.max(0, volLevel - 1);
+  renderVolBars();
+  socket.emit('volumeDown');
+});
+btnMute.addEventListener('click', () => {
+  muted = !muted;
+  renderVolBars();
+  socket.emit('mute');
+});
 
+// --- Passcode gate ---
 const passcodeModal   = document.getElementById('passcodeModal');
+const passcodeTitle   = document.getElementById('passcodeTitle');
 const passcodeInput   = document.getElementById('passcodeInput');
 const passcodeError   = document.getElementById('passcodeError');
 const passcodeCancel  = document.getElementById('passcodeCancel');
@@ -326,6 +336,7 @@ function requirePasscode(label, fn) {
   passcodeAction = { label, fn };
   passcodeInput.value = '';
   passcodeError.classList.add('hidden');
+  passcodeTitle.textContent = label;
   passcodeConfirm.textContent = label;
   passcodeModal.classList.remove('hidden');
   setTimeout(() => passcodeInput.focus(), 50);
@@ -373,7 +384,7 @@ function switchTab(tab) {
 function renderHistory() {
   const seen = new Set();
   const counts = state.playCounts || {};
-  const items = [...state.history]
+  const items = [...(state.history || [])]
     .reverse()
     .filter(s => seen.has(s.videoId) ? false : seen.add(s.videoId))
     .sort((a, b) => (counts[b.videoId] || 0) - (counts[a.videoId] || 0));
@@ -385,14 +396,14 @@ function renderHistory() {
     const count = counts[song.videoId] || 0;
     return `
     <div class="queue-item">
-      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.display='none'">
+      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
       <div class="queue-item-info">
         <div class="queue-item-title">${escHtml(song.title)}</div>
         <div class="queue-item-meta">${song.author ? escHtml(song.author) + ' · ' : ''}<span class="added-by">${escHtml(song.addedBy)}</span></div>
       </div>
       <span class="play-count-badge" title="Times played">${count}×</span>
       <button class="add-to-queue-btn" data-index="${i}" title="Add to queue">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
       </button>
       <button class="history-delete-btn" data-videoid="${song.videoId}" title="Remove from history">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -411,10 +422,10 @@ function renderHistory() {
     btn.addEventListener('click', () => {
       const song = items[parseInt(btn.dataset.index)];
       socket.emit('addToQueue', { ...song, voterId });
-      btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
       btn.classList.add('added');
       setTimeout(() => {
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
         btn.classList.remove('added');
       }, 1500);
     });
@@ -425,6 +436,7 @@ function renderHistory() {
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim();
   searchClear.classList.toggle('hidden', !q);
+  searchBar.classList.toggle('active', !!q);
   clearTimeout(searchDebounce);
   if (!q) { hideSearch(); return; }
   showSearchSpinner();
@@ -434,6 +446,7 @@ searchInput.addEventListener('input', () => {
 searchClear.addEventListener('click', () => {
   searchInput.value = '';
   searchClear.classList.add('hidden');
+  searchBar.classList.remove('active');
   hideSearch();
   searchInput.focus();
 });
@@ -477,12 +490,12 @@ function doSearch(query) {
 
     searchList.innerHTML = results.map((v, i) => `
       <div class="search-result-item" data-index="${i}">
-        <img class="search-thumb" src="${v.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.display='none'">
+        <img class="search-thumb" src="${v.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
         <div class="search-result-info">
           <div class="search-result-title">${escHtml(v.title)}</div>
           <div class="search-result-meta">${escHtml(v.author || '')} · ${v.durationStr || formatTime(v.duration)}</div>
         </div>
-        <span class="search-result-duration">${v.durationStr || formatTime(v.duration)}</span>
+        <span class="search-result-plus">+</span>
       </div>`).join('');
 
     searchList._results = results;
@@ -499,6 +512,7 @@ function addToQueue(song) {
   socket.emit('addToQueue', { ...song, voterId });
   searchInput.value = '';
   searchClear.classList.add('hidden');
+  searchBar.classList.remove('active');
   hideSearch();
   searchInput.focus();
 }
@@ -567,7 +581,6 @@ socket.on('discoveryFound', ({ ip, channelId, appName }) => {
   resultText.textContent = `✓ Found ${appName} on ${ip} (channel ID: ${channelId})`;
   discoveryResult.classList.remove('hidden');
 
-  // Re-enable device buttons
   deviceList.querySelectorAll('.device-select').forEach((btn) => {
     btn.textContent = 'Use this TV';
     btn.disabled = false;
@@ -576,7 +589,7 @@ socket.on('discoveryFound', ({ ip, channelId, appName }) => {
 
 socket.on('discoveryError', (msg) => {
   const line = document.createElement('div');
-  line.style.color = '#e84545';
+  line.style.color = '#e0533f';
   line.textContent = `Error: ${msg}`;
   discoveryLog.appendChild(line);
   btnScan.disabled = false;
@@ -593,7 +606,7 @@ btnSaveRoku.addEventListener('click', () => {
   discoveryResult.classList.add('hidden');
   discoveryLog.innerHTML = '';
   const line = document.createElement('div');
-  line.style.color = '#81c784';
+  line.style.color = '#6fcf6f';
   line.textContent = `Saved — Roku IP: ${pendingRokuConfig.ip}, YouTube: ${pendingRokuConfig.channelId}`;
   discoveryLog.appendChild(line);
   pendingRokuConfig = null;
@@ -602,9 +615,11 @@ btnSaveRoku.addEventListener('click', () => {
 
 // --- Helpers ---
 function formatTime(seconds) {
-  const s = Math.floor(Math.max(0, seconds));
-  const m = Math.floor(s / 60);
-  return `${m}:${(s % 60).toString().padStart(2, '0')}`;
+  const s = Math.floor(Math.max(0, seconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = (s % 60).toString().padStart(2, '0');
+  return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
 function escHtml(str) {
@@ -612,3 +627,6 @@ function escHtml(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// initial paint
+renderVolBars();
