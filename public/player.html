@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jukebox Player</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+
+    #player { width: 100%; height: 100%; display: none; }
+
+    /* Idle screen shown when nothing is playing */
+    #idle {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: #0a0a0a;
+    }
+
+    .idle-logo { font-size: 72px; }
+    .idle-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+    .idle-sub { font-size: 16px; color: #666; }
+    .idle-url { font-size: 20px; color: #e84545; font-weight: 600; margin-top: 8px; }
+
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #444;
+      display: inline-block;
+      margin-right: 6px;
+      transition: background 0.3s;
+    }
+    .status-dot.connected { background: #4caf50; animation: pulse 2s infinite; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      color: #555;
+      margin-top: 12px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Song info overlay at bottom */
+    #nowBar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 20px 32px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+      display: none;
+      align-items: flex-end;
+      gap: 16px;
+    }
+
+    #nowBar.visible { display: flex; }
+
+    #nowBarThumb {
+      width: 64px; height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    #nowBarInfo { flex: 1; }
+    #nowBarTitle { font-size: 15px; font-weight: 600; }
+    #nowBarMeta { font-size: 12px; color: #aaa; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+  <div id="idle">
+    <div class="idle-logo">🎵</div>
+    <div class="idle-title">Jukebox</div>
+    <div class="idle-sub">Waiting for someone to queue a song…</div>
+    <div class="idle-url" id="queueUrl"></div>
+    <div class="status-row">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Connecting…</span>
+    </div>
+  </div>
+
+  <!-- YouTube IFrame player target -->
+  <div id="player"></div>
+
+  <!-- Now playing bar overlay -->
+  <div id="nowBar">
+    <img id="nowBarThumb" src="" alt="">
+    <div id="nowBarInfo">
+      <div id="nowBarTitle"></div>
+      <div id="nowBarMeta"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Show the local URL so office folks know where to add songs
+    const queueUrl = document.getElementById('queueUrl');
+    queueUrl.textContent = `Add songs: ${location.protocol}//${location.hostname}:${location.port}`;
+
+    // --- YouTube IFrame API ---
+    let ytPlayer = null;
+    let ytReady = false;
+    let pendingVideoId = null;
+    let currentSongMeta = null;
+    let elapsedInterval = null;
+
+    window.onYouTubeIframeAPIReady = function () {
+      ytReady = true;
+      ytPlayer = new YT.Player('player', {
+        width: '100%',
+        height: '100%',
+        playerVars: {
+          autoplay: 1,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          modestbranding: 1,
+          rel: 0,
+          iv_load_policy: 3,
+          playsinline: 1,
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+          onError: onPlayerError,
+        },
+      });
+    };
+
+    function onPlayerReady() {
+      if (pendingVideoId) loadVideo(pendingVideoId);
+    }
+
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.ENDED) {
+        socket.emit('songEnded');
+        showIdle();
+      }
+    }
+
+    function onPlayerError(event) {
+      console.warn('YT player error:', event.data);
+      socket.emit('songError', pendingVideoId);
+      showIdle();
+    }
+
+    function loadVideo(videoId) {
+      pendingVideoId = videoId;
+      if (!ytReady || !ytPlayer) return;
+      ytPlayer.loadVideoById(videoId);
+      showPlayer();
+    }
+
+    function showPlayer() {
+      document.getElementById('idle').style.display = 'none';
+      document.getElementById('player').style.display = 'block';
+      document.getElementById('nowBar').classList.add('visible');
+      updateNowBar();
+      startElapsedSync();
+    }
+
+    function showIdle() {
+      document.getElementById('idle').style.display = 'flex';
+      document.getElementById('player').style.display = 'none';
+      document.getElementById('nowBar').classList.remove('visible');
+      clearInterval(elapsedInterval);
+      currentSongMeta = null;
+    }
+
+    function updateNowBar() {
+      if (!currentSongMeta) return;
+      document.getElementById('nowBarThumb').src = currentSongMeta.thumbnail || '';
+      document.getElementById('nowBarTitle').textContent = currentSongMeta.title || '';
+      document.getElementById('nowBarMeta').textContent = currentSongMeta.addedBy ? `Added by ${currentSongMeta.addedBy}` : '';
+    }
+
+    function startElapsedSync() {
+      clearInterval(elapsedInterval);
+      elapsedInterval = setInterval(() => {
+        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+          const t = ytPlayer.getCurrentTime();
+          if (t > 0) socket.emit('playerElapsed', t);
+        }
+      }, 5000);
+    }
+
+    // --- Socket.io ---
+    const socket = io();
+    const statusDot  = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    socket.on('connect', () => {
+      socket.emit('playerReady');
+      statusDot.classList.add('connected');
+      statusText.textContent = 'Connected — ready';
+    });
+
+    socket.on('disconnect', () => {
+      statusDot.classList.remove('connected');
+      statusText.textContent = 'Disconnected — reconnecting…';
+    });
+
+    socket.on('play', (videoId) => {
+      if (!videoId) return;
+      socket.emit('playerElapsed', 0);
+      loadVideo(videoId);
+    });
+
+    // Receive current song metadata for the now-bar
+    socket.on('state', (state) => {
+      currentSongMeta = state.currentSong;
+      updateNowBar();
+    });
+
+    socket.on('pause', () => {
+      if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') ytPlayer.pauseVideo();
+    });
+
+    socket.on('resume', () => {
+      if (ytPlayer && typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
+    });
+
+    socket.on('skip', () => {
+      if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
+      showIdle();
+    });
+
+    socket.on('stop', () => {
+      if (ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
+      showIdle();
+    });
+  </script>
+
+  <!-- Load YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
