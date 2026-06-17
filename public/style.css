@@ -51,6 +51,18 @@ body {
   display: flex; height: 100vh; width: 100%; overflow: hidden;
 }
 
+/* album-art ambient backdrop */
+.album-backdrop {
+  position: absolute; inset: 0; z-index: 0;
+  background-size: cover; background-position: center;
+  filter: blur(54px) saturate(1.35); transform: scale(1.2); opacity: 0.4;
+  transition: opacity .4s ease;
+}
+.backdrop-vignette {
+  position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(115% 92% at 50% 40%, transparent 0%, rgba(16,11,7,0.4) 62%, rgba(16,11,7,0.82) 100%);
+}
+
 /* ===================== SIDEBAR ===================== */
 .sidebar {
   position: relative; z-index: 2;
@@ -85,20 +97,34 @@ body {
 .icon-btn:hover { color: var(--ac); border-color: var(--ac); }
 
 /* TURNTABLE */
-.turntable { position: relative; width: 240px; height: 240px; flex: none; margin: 6px auto 2px; }
+.turntable { position: relative; width: 300px; height: 210px; flex: none; margin: 8px auto 4px; }
+
+/* album sleeve propped behind */
+.sleeve {
+  position: absolute; left: 0; top: 11px; width: 190px; height: 190px;
+  border-radius: 3px; overflow: hidden; transform: rotate(-2.5deg); z-index: 1;
+  box-shadow: 0 16px 38px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.45), 0 0 50px var(--glow);
+}
+.sleeve-art { width: 100%; height: 100%; background-size: cover; background-position: center; background-color: #2a2018; }
+.sleeve-spine {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 12px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.5), transparent);
+}
+.sleeve-gloss {
+  position: absolute; inset: 0;
+  background: linear-gradient(125deg, rgba(255,255,255,0.18) 0%, transparent 34%, transparent 100%);
+}
+
+/* the record, pulled out to the right */
 .vinyl {
-  position: absolute; inset: 0; border-radius: 50%;
+  position: absolute; right: 0; top: 9px; width: 192px; height: 192px; z-index: 2;
+  border-radius: 50%;
   background: radial-gradient(circle at 50% 50%, #14100c 0 30%, #0c0805 31% 33%, #1c150f 34% 100%);
   box-shadow: 0 0 0 7px #0a0705, 0 0 0 9px #2a2018, 0 22px 50px rgba(0,0,0,0.65), 0 0 70px var(--glow);
   animation: jb-spin 6s linear infinite;
   animation-play-state: running;
 }
 .vinyl.paused { animation-play-state: paused; }
-.vinyl.cover {
-  background: #2a2018; animation: none;
-  inset: 8px; border-radius: 8px;
-  box-shadow: 0 22px 50px rgba(0,0,0,0.6), 0 0 60px var(--glow); border: 1px solid #4a3829;
-}
 .vinyl-grooves {
   position: absolute; inset: 0; border-radius: 50%; opacity: 0.8;
   background: repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.045) 0px, rgba(255,255,255,0.045) 1px, transparent 1px, transparent 4px);
@@ -115,34 +141,66 @@ body {
 .vinyl-spindle {
   position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
   transform: translate(-50%,-50%); border-radius: 50%;
-  background: #0a0705; box-shadow: 0 0 0 2px #4a3829;
+  background: #0a0705; box-shadow: 0 0 0 2px #4a3829; z-index: 1;
 }
-/* album-cover variant: square label fills, no spindle/grooves */
-.vinyl.cover .vinyl-grooves,
-.vinyl.cover .vinyl-sheen,
-.vinyl.cover .vinyl-spindle { display: none; }
-.vinyl.cover .vinyl-label { inset: 0; border-radius: 8px; box-shadow: none; }
-
-.album-art { width: 100%; height: 100%; object-fit: cover; }
+.album-art { width: 100%; height: 100%; background-size: cover; background-position: center; }
 .album-art.empty { display: none; }
-.album-art-placeholder { color: #5e4d3d; display: flex; align-items: center; justify-content: center; }
+.album-art-placeholder { position: absolute; color: #5e4d3d; display: flex; align-items: center; justify-content: center; }
 
+/* album-cover tweak variant: single large crisp sleeve */
+.turntable.cover .vinyl,
+.turntable.cover .tonearm { display: none; }
+.turntable.cover .sleeve {
+  left: 50%; top: 0; width: 200px; height: 200px;
+  transform: translateX(-50%); border-radius: 8px;
+  box-shadow: 0 22px 50px rgba(0,0,0,0.6), 0 0 60px var(--glow); border: 1px solid #4a3829;
+}
+
+/* realistic tonearm */
 .tonearm {
-  position: absolute; top: -6px; right: 6px; width: 9px; height: 158px; z-index: 5;
-  transform-origin: top center; transform: rotate(26deg); border-radius: 6px;
-  background: linear-gradient(90deg, #6f6658, #d8d2c6 40%, #9a9286);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.5);
-  transition: transform .4s ease;
+  position: absolute; top: 2px; right: 48px; width: 18px; height: 162px; z-index: 5;
+  transform-origin: 50% 15px; transform: rotate(21deg); transition: transform .4s ease;
 }
-.tonearm.lifted { transform: rotate(14deg); }
-.tonearm-pivot {
-  position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
-  width: 22px; height: 22px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #e8e2d6, #7a7264); box-shadow: 0 0 0 2px #4a3829;
+.tonearm.lifted { transform: rotate(15deg); }
+.tonearm-weight {
+  position: absolute; top: -19px; left: 50%; transform: translateX(-50%);
+  width: 21px; height: 19px; border-radius: 5px;
+  background: linear-gradient(90deg, #222019, #615c52 46%, #1a1813);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.25);
 }
-.tonearm-head {
-  position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
-  width: 16px; height: 14px; border-radius: 3px; background: #cfc8ba;
+.tonearm-stub {
+  position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+  width: 3px; height: 20px; border-radius: 2px;
+  background: linear-gradient(90deg, #5a564d, #cdc8bd, #6a655c);
+}
+.tonearm-bearing {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 16px; height: 16px; border-radius: 4px;
+  background: radial-gradient(circle at 34% 28%, #e0ddd5, #565249);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.45);
+}
+.tonearm-bearing-dot {
+  position: absolute; top: 13px; left: 50%; transform: translateX(-50%);
+  width: 5px; height: 5px; border-radius: 50%; background: #33312c;
+}
+.tonearm-tube {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 120px; border-radius: 3px;
+  background: linear-gradient(90deg, #67635b 0%, #edebe4 46%, #7c776f 100%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+}
+.tonearm-headshell {
+  position: absolute; top: 133px; left: 50%; transform: translate(-50%,0) rotate(-13deg);
+  transform-origin: top center; width: 9px; height: 24px; border-radius: 2px;
+  background: linear-gradient(90deg, #2c2a24, #837e75 50%, #211f1a);
+}
+.tonearm-cartridge {
+  position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+  width: 8px; height: 8px; border-radius: 1px; background: #1d1b17;
+}
+.tonearm-stylus {
+  position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+  width: 1.5px; height: 5px; background: #d6d1c6;
 }
 
 /* now playing info */

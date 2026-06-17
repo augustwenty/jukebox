@@ -89,6 +89,10 @@
   <!-- Main app -->
   <div id="app" class="app hidden">
 
+    <!-- album-art ambient backdrop -->
+    <div id="albumBackdrop" class="album-backdrop hidden"></div>
+    <div class="backdrop-vignette"></div>
+
     <!-- ===================== SIDEBAR (the machine face) ===================== -->
     <aside class="sidebar">
       <div class="chrome-arch"></div>
@@ -106,22 +110,39 @@
 
       <!-- TURNTABLE -->
       <div class="turntable">
+        <!-- album sleeve propped behind -->
+        <div id="sleeve" class="sleeve hidden">
+          <div id="sleeveArt" class="sleeve-art"></div>
+          <div class="sleeve-spine"></div>
+          <div class="sleeve-gloss"></div>
+        </div>
+
+        <!-- the record, pulled out to the right -->
         <div id="vinyl" class="vinyl">
           <div class="vinyl-grooves"></div>
           <div class="vinyl-sheen"></div>
           <div class="vinyl-label">
-            <img id="albumArt" class="album-art" src="" alt="" onerror="this.style.opacity=0">
+            <div id="albumArt" class="album-art"></div>
             <div id="albumArtPlaceholder" class="album-art-placeholder">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
               </svg>
             </div>
           </div>
           <div class="vinyl-spindle"></div>
         </div>
+
+        <!-- realistic tonearm -->
         <div class="tonearm">
-          <div class="tonearm-pivot"></div>
-          <div class="tonearm-head"></div>
+          <div class="tonearm-weight"></div>
+          <div class="tonearm-stub"></div>
+          <div class="tonearm-bearing"></div>
+          <div class="tonearm-bearing-dot"></div>
+          <div class="tonearm-tube"></div>
+          <div class="tonearm-headshell">
+            <div class="tonearm-cartridge"></div>
+            <div class="tonearm-stylus"></div>
+          </div>
         </div>
       </div>
 

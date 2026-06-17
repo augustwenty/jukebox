@@ -30,6 +30,9 @@ const nameSubmit    = document.getElementById('nameSubmit');
 const appEl         = document.getElementById('app');
 
 const vinyl         = document.getElementById('vinyl');
+const albumBackdrop = document.getElementById('albumBackdrop');
+const sleeve        = document.getElementById('sleeve');
+const sleeveArt     = document.getElementById('sleeveArt');
 const albumArt      = document.getElementById('albumArt');
 const albumArtPH    = document.getElementById('albumArtPlaceholder');
 const eqBars        = document.getElementById('eqBars');
@@ -139,6 +142,28 @@ function renderAll() {
   if (tabHistory.classList.contains('active')) renderHistory();
 }
 
+// Paint the current cover across backdrop, propped sleeve, and record label.
+function setArt(thumb) {
+  if (thumb) {
+    const url = `url("${thumb}")`;
+    albumBackdrop.style.backgroundImage = url;
+    albumBackdrop.classList.remove('hidden');
+    sleeveArt.style.backgroundImage = url;
+    sleeve.classList.remove('hidden');
+    albumArt.style.backgroundImage = url;
+    albumArt.classList.remove('hidden');
+    albumArtPH.classList.add('hidden');
+  } else {
+    albumBackdrop.classList.add('hidden');
+    albumBackdrop.style.backgroundImage = 'none';
+    sleeve.classList.add('hidden');
+    sleeveArt.style.backgroundImage = 'none';
+    albumArt.style.backgroundImage = 'none';
+    albumArt.classList.add('hidden');
+    albumArtPH.classList.remove('hidden');
+  }
+}
+
 function renderNowPlaying() {
   const song = state.currentSong;
 
@@ -148,15 +173,7 @@ function renderNowPlaying() {
     nowAddedBy.innerHTML = song.addedBy ? `Dropped by <b>${escHtml(song.addedBy)}</b>` : '';
     totalTime.textContent = formatTime(song.duration);
 
-    if (song.thumbnail) {
-      albumArt.src = song.thumbnail;
-      albumArt.style.opacity = '1';
-      albumArt.classList.remove('hidden');
-      albumArtPH.classList.add('hidden');
-    } else {
-      albumArt.classList.add('hidden');
-      albumArtPH.classList.remove('hidden');
-    }
+    setArt(song.thumbnail);
   } else {
     nowTitle.textContent = 'Nothing playing';
     nowAuthor.textContent = '';
@@ -164,8 +181,7 @@ function renderNowPlaying() {
     totalTime.textContent = '0:00';
     elapsedEl.textContent = '0:00';
     progressBar.style.width = '0%';
-    albumArt.classList.add('hidden');
-    albumArtPH.classList.remove('hidden');
+    setArt('');
   }
 
   // play / pause icon
@@ -252,7 +268,7 @@ function renderQueue() {
         <button class="vote-btn down ${myVote === -1 ? 'active' : ''}" data-video="${song.videoId}" data-addedat="${song.addedAt}" data-value="-1" title="Downvote">▼</button>
       </div>
       <span class="queue-num">${i + 1}</span>
-      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
+      ${song.thumbnail ? `<img class="queue-thumb" src="${song.thumbnail}" alt="" loading="lazy" onerror="this.style.opacity=0">` : ''}
       <div class="queue-item-info">
         <div class="queue-item-title">${escHtml(song.title)}</div>
         <div class="queue-item-meta">
@@ -396,7 +412,7 @@ function renderHistory() {
     const count = counts[song.videoId] || 0;
     return `
     <div class="queue-item">
-      <img class="queue-thumb" src="${song.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
+      ${song.thumbnail ? `<img class="queue-thumb" src="${song.thumbnail}" alt="" loading="lazy" onerror="this.style.opacity=0">` : ''}
       <div class="queue-item-info">
         <div class="queue-item-title">${escHtml(song.title)}</div>
         <div class="queue-item-meta">${song.author ? escHtml(song.author) + ' · ' : ''}<span class="added-by">${escHtml(song.addedBy)}</span></div>
@@ -490,7 +506,7 @@ function doSearch(query) {
 
     searchList.innerHTML = results.map((v, i) => `
       <div class="search-result-item" data-index="${i}">
-        <img class="search-thumb" src="${v.thumbnail || ''}" alt="" loading="lazy" onerror="this.style.opacity=0">
+        ${v.thumbnail ? `<img class="search-thumb" src="${v.thumbnail}" alt="" loading="lazy" onerror="this.style.opacity=0">` : ''}
         <div class="search-result-info">
           <div class="search-result-title">${escHtml(v.title)}</div>
           <div class="search-result-meta">${escHtml(v.author || '')} · ${v.durationStr || formatTime(v.duration)}</div>
