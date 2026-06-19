@@ -30,6 +30,12 @@ A self-hosted office jukebox that lets everyone in the room queue songs from the
 
 ## Setup
 
+> **Prefer the shortcut?** If you have `make` available, you can skip the steps below and just run:
+> ```bash
+> make first-run
+> ```
+> This installs dependencies, creates `.env` from the example, and starts the server in one shot. See [Makefile Commands](#makefile-commands) for the full list.
+
 **1. Install dependencies**
 
 ```bash
@@ -67,6 +73,23 @@ The server binds to `0.0.0.0:3000` so it's reachable from any device on your net
 - From phones and other computers: `http://<your-machine-ip>:3000`
 
 To find your machine's IP on macOS: `System Settings > Wi-Fi > Details`.
+
+---
+
+## Makefile Commands
+
+A `Makefile` is included so common tasks don't require remembering npm script names or shell one-liners. Run `make help` at any time to see the list.
+
+| Command | Description |
+|---|---|
+| `make first-run` | First-time setup in one step: installs deps, creates `.env`, and starts the server |
+| `make install` | Install npm dependencies (`npm install`) |
+| `make setup` | Copy `.env.example` → `.env` (skips safely if `.env` already exists) |
+| `make start` | Start the server in production mode (`npm start`) |
+| `make start-dev` | Start the server with auto-reload via nodemon (`npm run dev`) |
+| `make stop` | Kill whatever is running on port 3000 |
+| `make reset` | Delete `jukebox-state.json` to wipe the queue, history, and play counts |
+| `make open` | Open `http://localhost:3000` in your default browser |
 
 ---
 
@@ -147,6 +170,8 @@ Browser clients  ──Socket.io──▶  Node.js server  ──HTTP──▶  
 
 **Port 3000 already in use**
 ```bash
+make stop
+# or manually:
 lsof -ti :3000 | xargs kill -9
 ```
 
