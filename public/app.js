@@ -67,6 +67,7 @@ const searchEmpty   = document.getElementById('searchEmpty');
 const queueList     = document.getElementById('queueList');
 const queueCount    = document.getElementById('queueCount');
 const btnClearQueue = document.getElementById('btnClearQueue');
+const btnAutoFill   = document.getElementById('btnAutoFill');
 const tabQueue      = document.getElementById('tabQueue');
 const tabHistory    = document.getElementById('tabHistory');
 const queueView     = document.getElementById('queueView');
@@ -139,6 +140,7 @@ function renderAll() {
   renderNowPlaying();
   renderQueue();
   renderRokuStatus();
+  updateAutoFillAvailability();
   if (tabHistory.classList.contains('active')) renderHistory();
 }
 
@@ -245,13 +247,20 @@ function renderQueue() {
   queueCount.textContent = ordered.length;
 
   if (ordered.length === 0) {
+    const hasHistory = !!(state.history && state.history.length);
     queueList.innerHTML = `
       <div class="queue-empty">
         <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
         </svg>
-        <p>Queue is empty — search for a track above</p>
+        <p>Queue is empty — search for a track above${hasHistory ? ' or let Auto DJ fill it' : ''}</p>
+        ${hasHistory ? `<button class="empty-autofill" id="emptyAutoFill">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5z"/></svg>
+          Auto-fill ${AUTOFILL_COUNT} songs
+        </button>` : ''}
       </div>`;
+    const eb = document.getElementById('emptyAutoFill');
+    if (eb) eb.addEventListener('click', () => autoFill([eb, btnAutoFill]));
     return;
   }
 
@@ -359,6 +368,40 @@ function requirePasscode(label, fn) {
 }
 
 btnClearQueue.addEventListener('click', () => requirePasscode('Clear queue', () => socket.emit('clearQueue')));
+
+// --- Auto DJ: fill the queue with songs similar to history ---
+const AUTOFILL_COUNT = 5;
+let autoFilling = false;
+
+function autoFill(btns) {
+  if (autoFilling) return;
+  autoFilling = true;
+  const list = (btns || []).filter(Boolean);
+  list.forEach((b) => { b.disabled = true; });
+  btnAutoFill.classList.add('loading');
+  list.forEach((b) => { if (b.classList.contains('empty-autofill')) b.textContent = 'Finding songs…'; });
+
+  socket.emit('fillSimilar', { count: AUTOFILL_COUNT, voterId }, (err, res) => {
+    autoFilling = false;
+    btnAutoFill.classList.remove('loading');
+    list.forEach((b) => { b.disabled = false; });
+    list.forEach((b) => { if (b.classList.contains('empty-autofill')) b.textContent = `Auto-fill ${AUTOFILL_COUNT} songs`; });
+    updateAutoFillAvailability();
+    if (err) { showQueueError(typeof err === 'string' ? err : 'Auto DJ failed — try again.'); return; }
+    if (res && res.added === 0) showQueueError('Couldn’t find new songs to add.');
+  });
+}
+
+function updateAutoFillAvailability() {
+  if (autoFilling) return;
+  const hasHistory = !!(state.history && state.history.length);
+  btnAutoFill.disabled = !hasHistory;
+  btnAutoFill.title = hasHistory
+    ? 'Fill the queue with songs similar to your history'
+    : 'Play some songs first to use Auto DJ';
+}
+
+btnAutoFill.addEventListener('click', () => autoFill([btnAutoFill]));
 
 passcodeCancel.addEventListener('click', closePasscode);
 passcodeModal.addEventListener('click', (e) => { if (e.target === passcodeModal) closePasscode(); });

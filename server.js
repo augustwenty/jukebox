@@ -72,6 +72,17 @@ function netVotes(song) {
   return Object.values(song.votes || {}).reduce((s, v) => s + v, 0);
 }
 
+// Take the top-N items then shuffle them, so seeds stay relevant to taste
+// but vary between clicks.
+function shuffleTop(arr, n) {
+  const top = arr.slice(0, n);
+  for (let i = top.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [top[i], top[j]] = [top[j], top[i]];
+  }
+  return top;
+}
+
 function sortQueue() {
   queue.sort((a, b) => {
     const diff = netVotes(b) - netVotes(a);
@@ -241,6 +252,116 @@ io.on('connection', (socket) => {
       queue.push(entry);
       broadcastState();
     }
+  });
+
+  // Auto DJ: fill the queue with songs similar to what's in the history.
+  // "Similar" = a mix of new tracks by the artists in history (weighted by
+  // play count) plus some well-loved high-play-count favorites. Only YouTube
+  // search is available, so artists are the discovery seed.
+  socket.on('fillSimilar', async (opts, callback) => {
+    const cb = typeof callback === 'function' ? callback : () => {};
+    const count = Math.max(1, Math.min(20, Number(opts?.count) || 5));
+    const voterId = String(opts?.voterId || '');
+
+    if (!history.length) return cb('No history yet — play some songs first.');
+
+    // videoIds we must not (re)add
+    const inQueue = new Set(queue.map((s) => s.videoId));
+    if (currentSong) inQueue.add(currentSong.videoId);
+
+    // --- favorites: unique history songs by play count, not already queued ---
+    const seenFav = new Set();
+    const favorites = history
+      .filter((s) => (seenFav.has(s.videoId) ? false : seenFav.add(s.videoId)))
+      .filter((s) => !inQueue.has(s.videoId))
+      .sort((a, b) => (playCounts[b.videoId] || 0) - (playCounts[a.videoId] || 0));
+
+    // --- artist seeds: weighted by appearances + play count ---
+    const weight = {};
+    for (const s of history) {
+      const a = (s.author || '').trim();
+      if (!a) continue;
+      weight[a] = (weight[a] || 0) + 1 + (playCounts[s.videoId] || 0);
+    }
+    const artists = shuffleTop(
+      Object.keys(weight).sort((x, y) => weight[y] - weight[x]),
+      8
+    );
+
+    // exclude already-known tracks from "new" discovery (we want fresh songs)
+    const excludeNew = new Set(inQueue);
+    for (const s of history) excludeNew.add(s.videoId);
+
+    const newPicks = [];
+    for (const artist of artists) {
+      if (newPicks.length >= count) break;
+      let videos = [];
+      try {
+        const r = await yts(artist);
+        videos = r.videos || [];
+      } catch (err) {
+        console.warn('fillSimilar search failed:', artist, err.message);
+      }
+      for (const v of videos) {
+        if (newPicks.length >= count) break;
+        if (!v.videoId || excludeNew.has(v.videoId)) continue;
+        const secs = v.duration?.seconds || 0;
+        if (secs > 900) continue; // skip full albums / long live sets
+        excludeNew.add(v.videoId);
+        newPicks.push({
+          videoId: v.videoId,
+          title: v.title,
+          thumbnail: v.thumbnail,
+          duration: secs,
+          durationStr: v.timestamp,
+          author: v.author?.name || '',
+        });
+      }
+    }
+
+    // --- compose the batch: ~40% favorites, rest new, then backfill ---
+    const favTarget = Math.min(Math.round(count * 0.4), favorites.length);
+    const picks = [];
+    const used = new Set();
+    const take = (song) => {
+      if (!song || used.has(song.videoId)) return;
+      used.add(song.videoId);
+      picks.push(song);
+    };
+    favorites.slice(0, favTarget).forEach(take);
+    for (const v of newPicks) { if (picks.length >= count) break; take(v); }
+    for (const f of favorites) { if (picks.length >= count) break; take(f); }
+
+    // --- enqueue ---
+    let added = 0;
+    for (const p of picks) {
+      if (added >= count) break;
+      if (inQueue.has(p.videoId)) continue;
+      inQueue.add(p.videoId);
+      queue.push({
+        videoId: p.videoId,
+        title: String(p.title).slice(0, 120),
+        thumbnail: p.thumbnail || '',
+        duration: Number(p.duration) || 0,
+        durationStr: p.durationStr || '',
+        author: String(p.author || '').slice(0, 80),
+        addedBy: 'Auto DJ',
+        addedByVoterId: voterId,
+        addedAt: Date.now() + added,
+        votes: {},
+      });
+      added++;
+    }
+
+    if (added === 0) return cb('Couldn’t find new songs to add — try again.');
+
+    if (!currentSong) {
+      playNext('autofill');
+    } else {
+      broadcastState();
+    }
+    console.log(`[fillSimilar] added ${added} song(s)`);
+    cb(null, { added });
   });
 
   // Voting: value 1 = upvote, -1 = downvote, 0 = remove vote
